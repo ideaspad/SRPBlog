@@ -16,27 +16,22 @@ public class BasicAssetPipe : RenderPipelineAsset
     }
 #endif
 
-    protected override IRenderPipeline InternalCreatePipeline()
+    protected override RenderPipeline CreatePipeline()
     {
-        return new BasicPipeInstance(clearColor);
+        return new BasicPipeInstance(Color.cyan);
     }
 }
-
 public class BasicPipeInstance : RenderPipeline
 {
-    private Color m_ClearColor = Color.black;
+    private Color m_ClearColor = Color.blue;
 
     public BasicPipeInstance(Color clearColor)
     {
         m_ClearColor = clearColor;
     }
-
-    public override void Render(ScriptableRenderContext context, Camera[] cameras)
+    
+    protected override void Render(ScriptableRenderContext context, Camera[] cameras)
     {
-        // does not so much yet :()
-        base.Render(context, cameras);
-
-        // clear buffers to the configured color
         var cmd = new CommandBuffer();
         cmd.ClearRenderTarget(true, true, m_ClearColor);
         context.ExecuteCommandBuffer(cmd);

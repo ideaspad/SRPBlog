@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Experimental.Rendering;
+using UnityEngine.Experimental.Rendering.Universal;
 
 [ExecuteInEditMode]
 public class OpaqueAssetPipe : RenderPipelineAsset
@@ -15,7 +16,7 @@ public class OpaqueAssetPipe : RenderPipelineAsset
     }
 #endif
 
-    protected override IRenderPipeline InternalCreatePipeline()
+    protected override RenderPipeline CreatePipeline()
     {
         return new OpaqueAssetPipeInstance();
     }
@@ -23,40 +24,36 @@ public class OpaqueAssetPipe : RenderPipelineAsset
 
 public class OpaqueAssetPipeInstance : RenderPipeline
 {
-    public override void Render(ScriptableRenderContext context, Camera[] cameras)
+    protected override void Render(ScriptableRenderContext context, Camera[] cameras)
     {
-        base.Render(context, cameras);
+        BeginFrameRendering(context, cameras);
 
+        ScriptableCullingParameters scriptableCullingParameters;
         foreach (var camera in cameras)
         {
-            // Culling
-            ScriptableCullingParameters cullingParams;
-            if (!CullResults.GetCullingParameters(camera, out cullingParams))
+            if (!camera.TryGetCullingParameters(out scriptableCullingParameters)) 
                 continue;
-
-            CullResults cull = CullResults.Cull(ref cullingParams, context);
-
-            // Setup camera for rendering (sets render target, view/projection matrices and other
-            // per-camera built-in shader variables).
-            context.SetupCameraProperties(camera);
-
-            // clear depth buffer
-            var cmd = new CommandBuffer();
-            cmd.ClearRenderTarget(true, false, Color.black);
-            context.ExecuteCommandBuffer(cmd);
-            cmd.Release();
-
-            // Draw opaque objects using BasicPass shader pass
-            var settings = new DrawRendererSettings(camera, new ShaderPassName("BasicPass"));
-            settings.sorting.flags = SortFlags.CommonOpaque;
-
-            var filterSettings = new FilterRenderersSettings(true) { renderQueueRange = RenderQueueRange.opaque };
-            context.DrawRenderers(cull.visibleRenderers, ref settings, filterSettings);
+            BeginCameraRendering(context, camera);
             
-            // Draw skybox
+            context.SetupCameraProperties(camera);
+            {
+                CommandBuffer commandBuffer = new CommandBuffer();
+                commandBuffer.ClearRenderTarget(true, true, Color.black);
+                context.ExecuteCommandBuffer(commandBuffer);
+                commandBuffer.Release();
+            }
+
+            CullingResults cullingResults = context.Cull(ref scriptableCullingParameters);
+            
+            DrawingSettings drawingSettings = new DrawingSettings(new ShaderTagId("BasicPass"), new SortingSettings(camera));
+            FilteringSettings filteringSettings = FilteringSettings.defaultValue;
+            filteringSettings.renderQueueRange = RenderQueueRange.opaque;
+            context.DrawRenderers(cullingResults, ref drawingSettings, ref filteringSettings);
             context.DrawSkybox(camera);
 
-            context.Submit();
+            EndCameraRendering(context, camera);
         }
+        context.Submit();
+        EndFrameRendering(context, cameras);
     }
 }
